@@ -4,6 +4,7 @@ import { NETWORK } from "../config.js";
 import { ClientToServerMessage, ServerToClientMessage } from "../types.js";
 import { World } from "../world.js";
 import { ClientToServerSchema } from "../validation.js";
+import { Encoder } from "msgpackr";
 
 type ServerDeps = { port: number; world: World };
 
@@ -12,10 +13,13 @@ export function createWSServer({ port, world }: ServerDeps) {
 
   type Client = { id: string; ws: WebSocket; name: string; color: number; lastInputSec: number; budget: number };
   const clients = new Map<WebSocket, Client>();
+  
+  const encoder = new Encoder();
 
   function send(ws: WebSocket, msg: ServerToClientMessage) {
     try {
-      ws.send(JSON.stringify(msg));
+      const encoded = encoder.encode(msg);
+      ws.send(encoded);
     } catch {}
   }
 

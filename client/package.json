@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "pixi.js": "^8.8.1"
+    "pixi.js": "^8.8.1",
+    "msgpackr": "^1.11.5"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

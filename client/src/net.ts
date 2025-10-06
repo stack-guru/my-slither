@@ -1,3 +1,5 @@
+import { Decoder } from "msgpackr";
+
 export type Snapshot = {
   tick: number;
   now: number;
@@ -7,6 +9,7 @@ export type Snapshot = {
 };
 
 let ws: WebSocket | null = null;
+const decoder = new Decoder();
 let myId = "";
 let cb: ((s: Snapshot) => void) | null = null;
 let connectAttempts = 0;
@@ -32,11 +35,32 @@ export function connect(host?: string, port?: number) {
   ws.onmessage = (ev) => {
     let msg: any;
     try {
-      msg = JSON.parse(String(ev.data));
-    } catch {
-      console.warn("[WS] non-JSON message ignored");
+      // Handle both binary (MessagePack) and text (JSON) messages
+      if (ev.data instanceof ArrayBuffer) {
+        msg = decoder.decode(new Uint8Array(ev.data));
+      } else if (ev.data instanceof Blob) {
+        // Convert Blob to ArrayBuffer for MessagePack
+        ev.data.arrayBuffer().then(buffer => {
+          try {
+            const msg = decoder.decode(new Uint8Array(buffer));
+            handleMessage(msg);
+          } catch (e) {
+            console.warn("[WS] MessagePack decode failed", e);
+          }
+        });
+        return;
+      } else {
+        // Fallback to JSON for text messages
+        msg = JSON.parse(String(ev.data));
+      }
+      handleMessage(msg);
+    } catch (e) {
+      console.warn("[WS] message decode failed", e);
       return;
     }
+  };
+
+  function handleMessage(msg: any) {
     if (!msg) return;
     if (msg.type === "welcome") {
       myId = msg.id;
