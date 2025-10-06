@@ -22,6 +22,9 @@ export function createWSServer({ port, world }: ServerDeps) {
     // Delta tracking
     lastSnapshot: PublicSnapshot | null;
     lastTick: number;
+    // Adaptive rate tracking
+    lastUpdateTick: number;
+    updateRate: number; // Current update rate (1, 2, or 4)
   };
   const clients = new Map<WebSocket, Client>();
   
@@ -55,6 +58,44 @@ export function createWSServer({ port, world }: ServerDeps) {
       sendBatch(client.ws, client.pendingMessages);
       client.pendingMessages = [];
     }
+  }
+
+  function getUpdateRate(distance: number): number {
+    if (distance <= NETWORK.distanceThresholds.close) {
+      return NETWORK.updateRates.close; // Every tick
+    } else if (distance <= NETWORK.distanceThresholds.medium) {
+      return NETWORK.updateRates.medium; // Every 2 ticks
+    } else {
+      return NETWORK.updateRates.far; // Every 4 ticks
+    }
+  }
+
+  function shouldSendUpdate(client: Client, currentTick: number): boolean {
+    const ticksSinceLastUpdate = currentTick - client.lastUpdateTick;
+    return ticksSinceLastUpdate >= client.updateRate;
+  }
+
+  function getClosestSnakeDistance(playerSnake: any, allSnakes: ReadonlyMap<string, any>): number {
+    if (!playerSnake || !playerSnake.segments.length) return NETWORK.distanceThresholds.medium;
+    
+    const playerHead = playerSnake.segments[0];
+    let closestDistance = Infinity;
+    
+    for (const [id, snake] of allSnakes) {
+      if (id === playerSnake.id || !snake.segments.length) continue;
+      
+      const otherHead = snake.segments[0];
+      const distance = Math.sqrt(
+        Math.pow(playerHead.x - otherHead.x, 2) + 
+        Math.pow(playerHead.y - otherHead.y, 2)
+      );
+      
+      if (distance < closestDistance) {
+        closestDistance = distance;
+      }
+    }
+    
+    return closestDistance === Infinity ? NETWORK.distanceThresholds.medium : closestDistance;
   }
 
   function createDeltaSnapshot(currentSnapshot: PublicSnapshot, lastSnapshot: PublicSnapshot | null): ServerToClientMessage {
@@ -113,6 +154,7 @@ export function createWSServer({ port, world }: ServerDeps) {
     let fullCount = 0;
     let deltaCount = 0;
     let skippedCount = 0;
+    let adaptiveSkipCount = 0;
     
     for (const c of clients.values()) {
       if (c.ws.readyState !== WebSocket.OPEN) continue;
@@ -130,8 +172,23 @@ export function createWSServer({ port, world }: ServerDeps) {
         continue; // Skip this client to prevent overload
       }
       
-      // Per-client view based on their snake head
+      // Check adaptive update rate - skip if not time for update
+      if (!shouldSendUpdate(c, snapshot.tick)) {
+        adaptiveSkipCount++;
+        continue; // Skip this client due to adaptive rate
+      }
+      
+      // Update client's update rate based on closest snake distance
       const s = world.getSnakes().get(c.id);
+      if (s && s.segments.length) {
+        const closestDistance = getClosestSnakeDistance(s, world.getSnakes());
+        const newUpdateRate = getUpdateRate(closestDistance);
+        if (newUpdateRate !== c.updateRate) {
+          c.updateRate = newUpdateRate;
+        }
+      }
+      
+      // Per-client view based on their snake head
       let snap = snapshot;
       if (s && s.segments.length) {
         const h = s.segments[0]!;
@@ -142,9 +199,10 @@ export function createWSServer({ port, world }: ServerDeps) {
       const deltaMsg = createDeltaSnapshot(snap, c.lastSnapshot);
       c.pendingMessages.push(deltaMsg);
       
-      // Update client's last snapshot
+      // Update client's last snapshot and update tracking
       c.lastSnapshot = snap;
       c.lastTick = snapshot.tick;
+      c.lastUpdateTick = snapshot.tick;
       
       if (deltaMsg.type === "state") {
         fullCount++;
@@ -173,7 +231,7 @@ export function createWSServer({ port, world }: ServerDeps) {
       const getViewCount = 0;
       const cacheReuseCount = 0;
       // Match src_demo's style and include foods for visibility
-      console.log(`📡 SEND: players=${totalPlayers} foods=${foodCount} batches=${batchCount} time=${processingTime}ms full=${fullCount} delta=${deltaCount} skip=${skippedCount} views{subs=${subsBuildCount},fallback=${getViewCount},cache=${cacheReuseCount}}`);
+      console.log(`📡 SEND: players=${totalPlayers} foods=${foodCount} batches=${batchCount} time=${processingTime}ms full=${fullCount} delta=${deltaCount} skip=${skippedCount} adaptive=${adaptiveSkipCount} views{subs=${subsBuildCount},fallback=${getViewCount},cache=${cacheReuseCount}}`);
     }
   }
 
@@ -207,7 +265,9 @@ export function createWSServer({ port, world }: ServerDeps) {
           budget: NETWORK.inputRateLimitPerSec, 
           pendingMessages: [],
           lastSnapshot: null,
-          lastTick: 0
+          lastTick: 0,
+          lastUpdateTick: 0,
+          updateRate: NETWORK.updateRates.close
         });
         send(ws, { type: "welcome", id: clientId, world: { width: world.width, height: world.height } });
         return;

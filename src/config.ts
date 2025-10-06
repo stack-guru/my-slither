@@ -33,5 +33,15 @@ export const NETWORK = {
   // Backpressure settings
   backpressureBytes: 256 * 1024, // 256KB buffer limit
   backpressureSkipThreshold: 0.8, // Skip if buffer > 80% full
+  // Adaptive update rates
+  updateRates: {
+    close: 1,      // Every tick (30ms) - within 400px
+    medium: 2,     // Every 2 ticks (60ms) - within 800px  
+    far: 4,        // Every 4 ticks (120ms) - within viewRadius
+  },
+  distanceThresholds: {
+    close: 400,    // Close distance threshold
+    medium: 800,  // Medium distance threshold
+  },
 };
 
