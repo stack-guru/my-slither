@@ -1,0 +1,146 @@
+import { Application, Container, Graphics } from "pixi.js";
+import { connect, sendInput, onSnapshot, type Snapshot, getMyId } from "./net.js";
+
+const app = new Application();
+const stage = new Container();
+const worldLayer = new Container();
+const snakesLayer = new Container();
+const foodLayer = new Container();
+const border = new Graphics();
+const snakePool: Map<string, Graphics[]> = new Map();
+const foodPool: Map<number, Graphics> = new Map();
+const debug = new Graphics();
+
+async function setup() {
+  await app.init({ background: "#101012", resizeTo: window, antialias: true });
+  document.getElementById("app")!.appendChild(app.canvas);
+  app.stage.addChild(stage);
+  stage.addChild(worldLayer);
+  worldLayer.addChild(border);
+  worldLayer.addChild(foodLayer);
+  worldLayer.addChild(snakesLayer);
+  worldLayer.addChild(debug);
+
+  hookInput();
+  startNet();
+}
+
+function hookInput() {
+  let boosting = false;
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space") boosting = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "Space") boosting = false;
+  });
+  window.addEventListener("mousedown", (e) => {
+    if (e.button === 0 || e.button === 2) boosting = true;
+  });
+  window.addEventListener("mouseup", (e) => {
+    if (e.button === 0 || e.button === 2) boosting = false;
+  });
+  window.addEventListener("mousemove", (e) => {
+    const cx = app.renderer.width / 2;
+    const cy = app.renderer.height / 2;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    const angle = Math.atan2(dy, dx);
+    sendInput(angle, boosting);
+  });
+}
+
+function render(snapshot: Snapshot) {
+  // draw world border (pretty red line)
+  border.clear();
+  border.rect(0, 0, snapshot.world.width, snapshot.world.height).stroke({ width: 6, color: 0xff3b30, alpha: 0.9 });
+
+  // Mark all pools unused initially; we'll reuse existing graphics where possible
+  const usedSnakeIds = new Set<string>();
+  const usedFoodIds = new Set<number>();
+
+  // draw food
+  for (const [id, x, y, r, color] of snapshot.food) {
+    usedFoodIds.add(id);
+    let g = foodPool.get(id);
+    if (!g) {
+      g = new Graphics();
+      foodPool.set(id, g);
+      foodLayer.addChild(g);
+    }
+    g.clear();
+    // Core circle
+    g.circle(x, y, r).fill(color ?? 0x88ff88);
+    // Glow ring
+    g.circle(x, y, r * 1.8).stroke({ width: 2, color: color ?? 0x88ff88, alpha: 0.5 });
+    g.circle(x, y, r * 1.4).stroke({ width: 3, color: color ?? 0x88ff88, alpha: 0.35 });
+  }
+
+  // draw snakes
+  let myHead: [number, number] | null = null;
+  const myId = getMyId();
+  for (const s of snapshot.snakes) {
+    const color = s.color;
+    usedSnakeIds.add(s.id);
+    let pieces = snakePool.get(s.id);
+    if (!pieces) {
+      pieces = [];
+      snakePool.set(s.id, pieces);
+    }
+    // Grow pool if needed
+    while (pieces.length < s.segments.length) {
+      const g = new Graphics();
+      pieces.push(g);
+      snakesLayer.addChild(g);
+    }
+    // Update or hide extra pieces
+    for (let i = 0; i < pieces.length; i++) {
+      const g = pieces[i];
+      if (i < s.segments.length) {
+        const [x, y] = s.segments[i];
+        const radius = s.radius * (i === 0 ? 1.2 : 1.0);
+        g.clear();
+        g.circle(x, y, radius).fill(color);
+        g.visible = true;
+        if (i === 0 && s.id === myId) myHead = [x, y];
+      } else {
+        g.visible = false;
+      }
+    }
+  }
+  // Cleanup graphics not used this frame to avoid memory leaks
+  for (const [id, g] of foodPool) {
+    if (!usedFoodIds.has(id)) {
+      if (g.parent) g.parent.removeChild(g);
+      g.destroy();
+      foodPool.delete(id);
+    }
+  }
+  for (const [sid, pieces] of snakePool) {
+    if (!usedSnakeIds.has(sid)) {
+      for (const g of pieces) {
+        if (g.parent) g.parent.removeChild(g);
+        g.destroy();
+      }
+      snakePool.delete(sid);
+    }
+  }
+
+  // center camera on my head
+  if (myHead) {
+    const [hx, hy] = myHead;
+    const cx = app.renderer.width / 2;
+    const cy = app.renderer.height / 2;
+    worldLayer.position.set(cx - hx, cy - hy);
+  }
+}
+
+function startNet() {
+  onSnapshot((snap) => {
+    render(snap);
+  });
+  connect();
+}
+
+setup();
+
+
