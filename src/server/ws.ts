@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { performance } from "node:perf_hooks";
 import { NETWORK } from "../config.js";
-import { ClientToServerMessage, ServerToClientMessage } from "../types.js";
+import { ClientToServerMessage, ServerToClientMessage, PublicSnapshot } from "../types.js";
 import { World } from "../world.js";
 import { ClientToServerSchema } from "../validation.js";
 import { Encoder } from "msgpackr";
@@ -19,6 +19,9 @@ export function createWSServer({ port, world }: ServerDeps) {
     lastInputSec: number; 
     budget: number;
     pendingMessages: ServerToClientMessage[];
+    // Delta tracking
+    lastSnapshot: PublicSnapshot | null;
+    lastTick: number;
   };
   const clients = new Map<WebSocket, Client>();
   
@@ -54,6 +57,48 @@ export function createWSServer({ port, world }: ServerDeps) {
     }
   }
 
+  function createDeltaSnapshot(currentSnapshot: PublicSnapshot, lastSnapshot: PublicSnapshot | null): ServerToClientMessage {
+    if (!lastSnapshot) {
+      // First snapshot - send full state
+      return { type: "state", snapshot: currentSnapshot };
+    }
+
+    // Create delta by comparing current vs last snapshot
+    const deltaSnakes = currentSnapshot.snakes.filter((current: any) => {
+      const last = lastSnapshot.snakes.find((s: any) => s.id === current.id);
+      if (!last) return true; // New snake
+      
+      // Check if snake changed (position, segments, etc.)
+      if (current.segments.length !== last.segments.length) return true;
+      for (let i = 0; i < current.segments.length; i++) {
+        const [cx, cy] = current.segments[i]!;
+        const [lx, ly] = last.segments[i]!;
+        if (Math.abs(cx - lx) > 0.1 || Math.abs(cy - ly) > 0.1) return true;
+      }
+      return false;
+    });
+
+    // For food, we need to send ALL food in the viewport for proper collision detection
+    // Food doesn't move, so we only need to send the complete current food list
+    const deltaFood = currentSnapshot.food;
+
+    // If too many snake changes, send full snapshot to avoid jitter
+    const snakeChangeRatio = deltaSnakes.length / currentSnapshot.snakes.length;
+    
+    if (snakeChangeRatio > 0.5) {
+      return { type: "state", snapshot: currentSnapshot };
+    }
+
+    return {
+      type: "state_delta",
+      tick: currentSnapshot.tick,
+      now: currentSnapshot.now,
+      snakes: deltaSnakes,
+      food: deltaFood,
+      world: currentSnapshot.world
+    };
+  }
+
   function broadcastState(snapshot: ReturnType<World["createPublicSnapshot"]>) {
     const start = performance.now();
     // Ensure clients whose snakes died are respawned before broadcasting
@@ -65,6 +110,8 @@ export function createWSServer({ port, world }: ServerDeps) {
       }
     }
     let sentCount = 0;
+    let fullCount = 0;
+    let deltaCount = 0;
     for (const c of clients.values()) {
       if (c.ws.readyState !== WebSocket.OPEN) continue;
       // Per-client view based on their snake head
@@ -74,8 +121,24 @@ export function createWSServer({ port, world }: ServerDeps) {
         const h = s.segments[0]!;
         snap = world.createViewSnapshot(snapshot.tick, snapshot.now, h.x, h.y, NETWORK.viewRadius);
       }
-      // Add state message to pending batch
-      c.pendingMessages.push({ type: "state", snapshot: snap });
+      
+      // Create delta snapshot
+      const deltaMsg = createDeltaSnapshot(snap, c.lastSnapshot);
+      c.pendingMessages.push(deltaMsg);
+      
+      // Update client's last snapshot
+      c.lastSnapshot = snap;
+      c.lastTick = snapshot.tick;
+      
+      if (deltaMsg.type === "state") {
+        fullCount++;
+      } else {
+        deltaCount++;
+        // Debug: log delta details occasionally
+        if (Math.random() < 0.01 && deltaMsg.type === "state_delta") {
+          console.log(`[DEBUG] Delta: snakes=${deltaMsg.snakes.length} food=${deltaMsg.food.length}`);
+        }
+      }
       sentCount++;
     }
     
@@ -90,12 +153,10 @@ export function createWSServer({ port, world }: ServerDeps) {
       const totalPlayers = world.getSnakes().size; // count all snakes, not only clients
       const foodCount = world.getFood().length;
       const batchCount = 1; // single broadcast batch
-      const fullCount = sentCount; // we only send full snapshots
-      const deltaCount = 0;
-      const deltaSkipCountLocal = 0;
       const subsBuildCount = 0;
       const getViewCount = 0;
       const cacheReuseCount = 0;
+      const deltaSkipCountLocal = 0;
       // Match src_demo's style and include foods for visibility
       console.log(`📡 SEND: players=${totalPlayers} foods=${foodCount} batches=${batchCount} time=${processingTime}ms full=${fullCount} delta=${deltaCount} skip=${deltaSkipCountLocal} views{subs=${subsBuildCount},fallback=${getViewCount},cache=${cacheReuseCount}}`);
     }
@@ -122,7 +183,17 @@ export function createWSServer({ port, world }: ServerDeps) {
         const color = Math.floor(Math.random() * 0xffffff);
         const snake = world.addSnake(name, color);
         clientId = snake.id;
-        clients.set(ws, { id: clientId, ws, name, color, lastInputSec: 0, budget: NETWORK.inputRateLimitPerSec, pendingMessages: [] });
+        clients.set(ws, { 
+          id: clientId, 
+          ws, 
+          name, 
+          color, 
+          lastInputSec: 0, 
+          budget: NETWORK.inputRateLimitPerSec, 
+          pendingMessages: [],
+          lastSnapshot: null,
+          lastTick: 0
+        });
         send(ws, { type: "welcome", id: clientId, world: { width: world.width, height: world.height } });
         return;
       }

@@ -45,6 +45,7 @@ export type ClientToServerMessage =
 export type ServerToClientMessage =
   | { type: "welcome"; id: string; world: { width: number; height: number } }
   | { type: "state"; snapshot: PublicSnapshot }
+  | { type: "state_delta"; tick: number; now: number; snakes: PublicSnapshot["snakes"]; food: PublicSnapshot["food"]; world: { width: number; height: number } }
   | { type: "batch"; messages: ServerToClientMessage[] };
 
 

@@ -15,6 +15,9 @@ let cb: ((s: Snapshot) => void) | null = null;
 let connectAttempts = 0;
 let lastSnapshotLoggedAt = 0;
 
+// Client-side state management for delta updates
+let clientState: Snapshot | null = null;
+
 export function onSnapshot(fn: (s: Snapshot) => void) {
   cb = fn;
 }
@@ -76,12 +79,66 @@ export function connect(host?: string, port?: number) {
       console.log(`[WS] welcome id=${myId}, world=${msg.world?.width}x${msg.world?.height}`);
     } else if (msg.type === "state") {
       const snap = msg.snapshot as Snapshot;
+      // Update client state with full snapshot
+      clientState = snap;
       const now = Date.now();
       if (now - lastSnapshotLoggedAt > 1000) {
         console.log(`[WS] state tick=${snap.tick} snakes=${snap.snakes.length} food=${snap.food.length}`);
         lastSnapshotLoggedAt = now;
       }
       cb?.(snap);
+    } else if (msg.type === "state_delta") {
+      // Handle delta updates - merge with current state
+      if (!clientState) {
+        // No previous state - treat as full snapshot
+        clientState = {
+          tick: msg.tick,
+          now: msg.now,
+          world: msg.world,
+          snakes: msg.snakes,
+          food: msg.food
+        };
+      } else {
+        // Merge delta with existing state
+        const mergedSnakes = [...clientState.snakes];
+        const mergedFood = [...clientState.food];
+        
+        // Update/Add snakes from delta
+        for (const deltaSnake of msg.snakes) {
+          const existingIndex = mergedSnakes.findIndex(s => s.id === deltaSnake.id);
+          if (existingIndex >= 0) {
+            mergedSnakes[existingIndex] = deltaSnake;
+          } else {
+            mergedSnakes.push(deltaSnake);
+          }
+        }
+        
+        // Replace food completely - delta contains ALL food in viewport
+        mergedFood.length = 0; // Clear existing food
+        mergedFood.push(...msg.food); // Add all food from delta
+        
+        // Remove snakes that are no longer in the viewport
+        const deltaSnakeIds = new Set(msg.snakes.map((s: any) => s.id));
+        const filteredSnakes = mergedSnakes.filter(snake => {
+          // Keep my snake and snakes in delta
+          return snake.id === myId || deltaSnakeIds.has(snake.id);
+        });
+        
+        clientState = {
+          tick: msg.tick,
+          now: msg.now,
+          world: msg.world,
+          snakes: filteredSnakes,
+          food: mergedFood
+        };
+      }
+      
+      const now = Date.now();
+      if (now - lastSnapshotLoggedAt > 1000) {
+        console.log(`[WS] delta tick=${clientState.tick} snakes=${clientState.snakes.length} food=${clientState.food.length}`);
+        lastSnapshotLoggedAt = now;
+      }
+      cb?.(clientState);
     }
   };
   ws.onerror = (e) => {
