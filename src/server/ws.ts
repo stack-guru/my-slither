@@ -11,7 +11,15 @@ type ServerDeps = { port: number; world: World };
 export function createWSServer({ port, world }: ServerDeps) {
   const wss = new WebSocketServer({ port, perMessageDeflate: false, maxPayload: NETWORK.maxMessageSizeBytes });
 
-  type Client = { id: string; ws: WebSocket; name: string; color: number; lastInputSec: number; budget: number };
+  type Client = { 
+    id: string; 
+    ws: WebSocket; 
+    name: string; 
+    color: number; 
+    lastInputSec: number; 
+    budget: number;
+    pendingMessages: ServerToClientMessage[];
+  };
   const clients = new Map<WebSocket, Client>();
   
   const encoder = new Encoder();
@@ -23,6 +31,29 @@ export function createWSServer({ port, world }: ServerDeps) {
     } catch {}
   }
 
+  function sendBatch(ws: WebSocket, messages: ServerToClientMessage[]) {
+    if (messages.length === 0) return;
+    try {
+      if (messages.length === 1) {
+        // Single message - send directly
+        const encoded = encoder.encode(messages[0]);
+        ws.send(encoded);
+      } else {
+        // Multiple messages - batch them
+        const batch = { type: "batch", messages } as const;
+        const encoded = encoder.encode(batch);
+        ws.send(encoded);
+      }
+    } catch {}
+  }
+
+  function flushClient(client: Client) {
+    if (client.pendingMessages.length > 0) {
+      sendBatch(client.ws, client.pendingMessages);
+      client.pendingMessages = [];
+    }
+  }
+
   function broadcastState(snapshot: ReturnType<World["createPublicSnapshot"]>) {
     const start = performance.now();
     // Ensure clients whose snakes died are respawned before broadcasting
@@ -30,7 +61,7 @@ export function createWSServer({ port, world }: ServerDeps) {
       if (!world.getSnakes().has(c.id)) {
         const newSnake = world.addSnake(c.name, c.color);
         c.id = newSnake.id;
-        send(c.ws, { type: "welcome", id: c.id, world: { width: world.width, height: world.height } });
+        c.pendingMessages.push({ type: "welcome", id: c.id, world: { width: world.width, height: world.height } });
       }
     }
     let sentCount = 0;
@@ -43,9 +74,16 @@ export function createWSServer({ port, world }: ServerDeps) {
         const h = s.segments[0]!;
         snap = world.createViewSnapshot(snapshot.tick, snapshot.now, h.x, h.y, NETWORK.viewRadius);
       }
-      const payload = JSON.stringify({ type: "state", snapshot: snap } as ServerToClientMessage);
-      c.ws.send(payload);
+      // Add state message to pending batch
+      c.pendingMessages.push({ type: "state", snapshot: snap });
       sentCount++;
+    }
+    
+    // Flush all pending messages for each client
+    for (const c of clients.values()) {
+      if (c.ws.readyState === WebSocket.OPEN) {
+        flushClient(c);
+      }
     }
     const processingTime = Math.round((performance.now() - start) * 100) / 100; // 2 decimals
     if (Math.random() < 0.02) {
@@ -84,7 +122,7 @@ export function createWSServer({ port, world }: ServerDeps) {
         const color = Math.floor(Math.random() * 0xffffff);
         const snake = world.addSnake(name, color);
         clientId = snake.id;
-        clients.set(ws, { id: clientId, ws, name, color, lastInputSec: 0, budget: NETWORK.inputRateLimitPerSec });
+        clients.set(ws, { id: clientId, ws, name, color, lastInputSec: 0, budget: NETWORK.inputRateLimitPerSec, pendingMessages: [] });
         send(ws, { type: "welcome", id: clientId, world: { width: world.width, height: world.height } });
         return;
       }

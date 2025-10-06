@@ -62,6 +62,15 @@ export function connect(host?: string, port?: number) {
 
   function handleMessage(msg: any) {
     if (!msg) return;
+    
+    if (msg.type === "batch") {
+      // Handle batched messages
+      for (const batchedMsg of msg.messages) {
+        handleMessage(batchedMsg);
+      }
+      return;
+    }
+    
     if (msg.type === "welcome") {
       myId = msg.id;
       console.log(`[WS] welcome id=${myId}, world=${msg.world?.width}x${msg.world?.height}`);
