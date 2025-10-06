@@ -1,4 +1,5 @@
 export const TICK_MS = 30;
+export const SPAWN_COUNT = 50;
 
 export const WORLD = {
   width: 3000,
@@ -8,7 +9,7 @@ export const WORLD = {
 export const SNAKE = {
   baseSpeedUnitsPerSec: 140,
   radius: 14,
-  initialSegments: 4,
+  initialSegments: 10,
   boostMultiplier: 2.5,
   segmentSpacing: 4,
   turnSpeedRadiansPerSec: Math.PI * 2,
@@ -16,7 +17,7 @@ export const SNAKE = {
 
 export const FOOD = {
   radius: 3,
-  targetCount: 1200,
+  targetCount: 600,
   perTickSpawnMax: 10,
   colors: [
     0xffffff, 0xffb6c1, 0xadd8e6, 0x90ee90, 0xffdab9,
