@@ -7,12 +7,12 @@ export const WORLD = {
 };
 
 export const SNAKE = {
-  baseSpeedUnitsPerSec: 140,
-  radius: 14,
+  baseSpeedUnitsPerSec: 120,
+  radius: 15,
   initialSegments: 10,
-  boostMultiplier: 2.5,
-  segmentSpacing: 4,
-  turnSpeedRadiansPerSec: Math.PI * 2,
+  boostMultiplier: 2,
+  segmentSpacing: 2,
+  turnSpeedRadiansPerSec: Math.PI * 1.5,
 };
 
 export const FOOD = {
@@ -29,6 +29,6 @@ export const NETWORK = {
   maxMessageSizeBytes: 64 * 1024,
   heartbeatIntervalMs: 5000,
   inputRateLimitPerSec: 40,
-  viewRadius: 1200,
+  viewRadius: 520,
 };
 

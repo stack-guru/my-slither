@@ -100,7 +100,7 @@ function render(snapshot: Snapshot) {
       const g = pieces[i];
       if (i < s.segments.length) {
         const [x, y] = s.segments[i];
-        const radius = s.radius * (i === 0 ? 1.2 : 1.0);
+        const radius = s.radius;
         g.clear();
         g.circle(x, y, radius).fill(color);
         g.visible = true;
@@ -125,7 +125,7 @@ function render(snapshot: Snapshot) {
       const front = s.radius * 0.35;
       const side = s.radius * 0.45;
       const eyeR = s.radius * 0.5;
-      const pupilR = s.radius * 0.22;
+      const pupilR = s.radius * 0.35;
 
       const lx = hx + fx * front + px * side;
       const ly = hy + fy * front + py * side;
