@@ -61,12 +61,16 @@ export function createWSServer({ port, world }: ServerDeps) {
   }
 
   function getUpdateRate(distance: number): number {
-    if (distance <= NETWORK.distanceThresholds.close) {
-      return NETWORK.updateRates.close; // Every tick
+    if (distance <= NETWORK.distanceThresholds.veryClose) {
+      return NETWORK.updateRates.veryClose; // Every tick (30ms)
+    } else if (distance <= NETWORK.distanceThresholds.close) {
+      return NETWORK.updateRates.close; // Every tick (30ms)
     } else if (distance <= NETWORK.distanceThresholds.medium) {
-      return NETWORK.updateRates.medium; // Every 2 ticks
+      return NETWORK.updateRates.medium; // Every 2 ticks (60ms)
+    } else if (distance <= NETWORK.distanceThresholds.far) {
+      return NETWORK.updateRates.far; // Every 4 ticks (120ms)
     } else {
-      return NETWORK.updateRates.far; // Every 4 ticks
+      return NETWORK.updateRates.veryFar; // Every 8 ticks (240ms)
     }
   }
 
@@ -81,17 +85,24 @@ export function createWSServer({ port, world }: ServerDeps) {
     const playerHead = playerSnake.segments[0];
     let closestDistance = Infinity;
     
+    // Early exit optimization: if we find a very close snake, we can stop searching
+    const earlyExitThreshold = NETWORK.distanceThresholds.close * 0.5; // 200px
+    
     for (const [id, snake] of allSnakes) {
       if (id === playerSnake.id || !snake.segments.length) continue;
       
       const otherHead = snake.segments[0];
-      const distance = Math.sqrt(
-        Math.pow(playerHead.x - otherHead.x, 2) + 
-        Math.pow(playerHead.y - otherHead.y, 2)
-      );
+      const dx = playerHead.x - otherHead.x;
+      const dy = playerHead.y - otherHead.y;
+      const distanceSq = dx * dx + dy * dy; // Avoid sqrt for performance
       
-      if (distance < closestDistance) {
-        closestDistance = distance;
+      // Early exit if very close
+      if (distanceSq < earlyExitThreshold * earlyExitThreshold) {
+        return Math.sqrt(distanceSq);
+      }
+      
+      if (distanceSq < closestDistance * closestDistance) {
+        closestDistance = Math.sqrt(distanceSq);
       }
     }
     
@@ -155,6 +166,7 @@ export function createWSServer({ port, world }: ServerDeps) {
     let deltaCount = 0;
     let skippedCount = 0;
     let adaptiveSkipCount = 0;
+    let updateRateStats = { veryClose: 0, close: 0, medium: 0, far: 0, veryFar: 0 };
     
     for (const c of clients.values()) {
       if (c.ws.readyState !== WebSocket.OPEN) continue;
@@ -185,7 +197,18 @@ export function createWSServer({ port, world }: ServerDeps) {
         const newUpdateRate = getUpdateRate(closestDistance);
         if (newUpdateRate !== c.updateRate) {
           c.updateRate = newUpdateRate;
+          // Debug: log update rate changes occasionally
+          if (Math.random() < 0.05) {
+            console.log(`[ADAPTIVE] Client ${c.id} update rate: ${c.updateRate} (distance: ${Math.round(closestDistance)}px)`);
+          }
         }
+        
+        // Track update rate statistics
+        if (c.updateRate === 1) updateRateStats.veryClose++;
+        else if (c.updateRate === 1) updateRateStats.close++;
+        else if (c.updateRate === 2) updateRateStats.medium++;
+        else if (c.updateRate === 4) updateRateStats.far++;
+        else if (c.updateRate === 8) updateRateStats.veryFar++;
       }
       
       // Per-client view based on their snake head
@@ -231,7 +254,7 @@ export function createWSServer({ port, world }: ServerDeps) {
       const getViewCount = 0;
       const cacheReuseCount = 0;
       // Match src_demo's style and include foods for visibility
-      console.log(`📡 SEND: players=${totalPlayers} foods=${foodCount} batches=${batchCount} time=${processingTime}ms full=${fullCount} delta=${deltaCount} skip=${skippedCount} adaptive=${adaptiveSkipCount} views{subs=${subsBuildCount},fallback=${getViewCount},cache=${cacheReuseCount}}`);
+      console.log(`📡 SEND: players=${totalPlayers} foods=${foodCount} batches=${batchCount} time=${processingTime}ms full=${fullCount} delta=${deltaCount} skip=${skippedCount} adaptive=${adaptiveSkipCount} rates{1=${updateRateStats.veryClose+updateRateStats.close},2=${updateRateStats.medium},4=${updateRateStats.far},8=${updateRateStats.veryFar}} views{subs=${subsBuildCount},fallback=${getViewCount},cache=${cacheReuseCount}}`);
     }
   }
 

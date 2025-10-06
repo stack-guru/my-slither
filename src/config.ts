@@ -35,13 +35,17 @@ export const NETWORK = {
   backpressureSkipThreshold: 0.8, // Skip if buffer > 80% full
   // Adaptive update rates
   updateRates: {
+    veryClose: 1,  // Every tick (30ms) - within 200px
     close: 1,      // Every tick (30ms) - within 400px
     medium: 2,     // Every 2 ticks (60ms) - within 800px  
     far: 4,        // Every 4 ticks (120ms) - within viewRadius
+    veryFar: 8,    // Every 8 ticks (240ms) - beyond viewRadius
   },
   distanceThresholds: {
-    close: 400,    // Close distance threshold
-    medium: 800,  // Medium distance threshold
+    veryClose: 200,  // Very close distance threshold
+    close: 400,       // Close distance threshold
+    medium: 800,      // Medium distance threshold
+    far: 1200,        // Far distance threshold
   },
 };
 
