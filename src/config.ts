@@ -30,5 +30,8 @@ export const NETWORK = {
   heartbeatIntervalMs: 5000,
   inputRateLimitPerSec: 40,
   viewRadius: 520,
+  // Backpressure settings
+  backpressureBytes: 256 * 1024, // 256KB buffer limit
+  backpressureSkipThreshold: 0.8, // Skip if buffer > 80% full
 };
 

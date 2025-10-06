@@ -112,8 +112,24 @@ export function createWSServer({ port, world }: ServerDeps) {
     let sentCount = 0;
     let fullCount = 0;
     let deltaCount = 0;
+    let skippedCount = 0;
+    
     for (const c of clients.values()) {
       if (c.ws.readyState !== WebSocket.OPEN) continue;
+      
+      // Check backpressure - skip if client buffer is too full
+      const bufferUsage = c.ws.bufferedAmount;
+      const bufferLimit = NETWORK.backpressureBytes * NETWORK.backpressureSkipThreshold;
+      
+      if (bufferUsage > bufferLimit) {
+        skippedCount++;
+        // Debug: log backpressure occasionally
+        if (Math.random() < 0.1) {
+          console.log(`[BACKPRESSURE] Skipped client ${c.id}, buffer: ${Math.round(bufferUsage/1024)}KB/${Math.round(bufferLimit/1024)}KB`);
+        }
+        continue; // Skip this client to prevent overload
+      }
+      
       // Per-client view based on their snake head
       const s = world.getSnakes().get(c.id);
       let snap = snapshot;
@@ -156,9 +172,8 @@ export function createWSServer({ port, world }: ServerDeps) {
       const subsBuildCount = 0;
       const getViewCount = 0;
       const cacheReuseCount = 0;
-      const deltaSkipCountLocal = 0;
       // Match src_demo's style and include foods for visibility
-      console.log(`📡 SEND: players=${totalPlayers} foods=${foodCount} batches=${batchCount} time=${processingTime}ms full=${fullCount} delta=${deltaCount} skip=${deltaSkipCountLocal} views{subs=${subsBuildCount},fallback=${getViewCount},cache=${cacheReuseCount}}`);
+      console.log(`📡 SEND: players=${totalPlayers} foods=${foodCount} batches=${batchCount} time=${processingTime}ms full=${fullCount} delta=${deltaCount} skip=${skippedCount} views{subs=${subsBuildCount},fallback=${getViewCount},cache=${cacheReuseCount}}`);
     }
   }
 
