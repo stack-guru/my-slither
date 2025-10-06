@@ -7,6 +7,7 @@ const worldLayer = new Container();
 const snakesLayer = new Container();
 const foodLayer = new Container();
 const border = new Graphics();
+const eyePool: Map<string, { l: Graphics; r: Graphics; lp: Graphics; rp: Graphics }> = new Map();
 const snakePool: Map<string, Graphics[]> = new Map();
 const foodPool: Map<number, Graphics> = new Map();
 const debug = new Graphics();
@@ -16,6 +17,8 @@ async function setup() {
   document.getElementById("app")!.appendChild(app.canvas);
   app.stage.addChild(stage);
   stage.addChild(worldLayer);
+  // Start closer (smaller visible area)
+  worldLayer.scale.set(1.5);
   worldLayer.addChild(border);
   worldLayer.addChild(foodLayer);
   worldLayer.addChild(snakesLayer);
@@ -106,6 +109,50 @@ function render(snapshot: Snapshot) {
         g.visible = false;
       }
     }
+
+    // Eyes on head
+    if (s.segments.length >= 2) {
+      const [hx, hy] = s.segments[0];
+      const [nx, ny] = s.segments[1];
+      const dx = hx - nx;
+      const dy = hy - ny;
+      const len = Math.hypot(dx, dy) || 1;
+      const fx = dx / len; // forward
+      const fy = dy / len;
+      const px = -fy; // perpendicular
+      const py = fx;
+
+      const front = s.radius * 0.35;
+      const side = s.radius * 0.45;
+      const eyeR = s.radius * 0.5;
+      const pupilR = s.radius * 0.22;
+
+      const lx = hx + fx * front + px * side;
+      const ly = hy + fy * front + py * side;
+      const rx = hx + fx * front - px * side;
+      const ry = hy + fy * front - py * side;
+
+      let eyes = eyePool.get(s.id);
+      if (!eyes) {
+        eyes = { l: new Graphics(), r: new Graphics(), lp: new Graphics(), rp: new Graphics() };
+        eyePool.set(s.id, eyes);
+        snakesLayer.addChild(eyes.l);
+        snakesLayer.addChild(eyes.r);
+        snakesLayer.addChild(eyes.lp);
+        snakesLayer.addChild(eyes.rp);
+      }
+      // Eyeballs (white)
+      eyes.l.clear();
+      eyes.l.circle(lx, ly, eyeR).fill(0xffffff);
+      eyes.r.clear();
+      eyes.r.circle(rx, ry, eyeR).fill(0xffffff);
+      // Pupils (black) slightly forward in the eye
+      const pupilOff = s.radius * 0.1;
+      eyes.lp.clear();
+      eyes.lp.circle(lx + fx * pupilOff, ly + fy * pupilOff, pupilR).fill(0x23272a);
+      eyes.rp.clear();
+      eyes.rp.circle(rx + fx * pupilOff, ry + fy * pupilOff, pupilR).fill(0x23272a);
+    }
   }
   // Cleanup graphics not used this frame to avoid memory leaks
   for (const [id, g] of foodPool) {
@@ -122,6 +169,14 @@ function render(snapshot: Snapshot) {
         g.destroy();
       }
       snakePool.delete(sid);
+      const eyes = eyePool.get(sid);
+      if (eyes) {
+        for (const g of [eyes.l, eyes.r, eyes.lp, eyes.rp]) {
+          if (g.parent) g.parent.removeChild(g);
+          g.destroy();
+        }
+        eyePool.delete(sid);
+      }
     }
   }
 
@@ -130,7 +185,8 @@ function render(snapshot: Snapshot) {
     const [hx, hy] = myHead;
     const cx = app.renderer.width / 2;
     const cy = app.renderer.height / 2;
-    worldLayer.position.set(cx - hx, cy - hy);
+    const s = worldLayer.scale.x || 1;
+    worldLayer.position.set(cx - hx * s, cy - hy * s);
   }
 }
 

@@ -29,13 +29,19 @@ export function createWSServer({ port, world }: ServerDeps) {
         send(c.ws, { type: "welcome", id: c.id, world: { width: world.width, height: world.height } });
       }
     }
-    const payload = JSON.stringify({ type: "state", snapshot } as ServerToClientMessage);
     let sentCount = 0;
     for (const c of clients.values()) {
-      if (c.ws.readyState === WebSocket.OPEN) {
-        c.ws.send(payload);
-        sentCount++;
+      if (c.ws.readyState !== WebSocket.OPEN) continue;
+      // Per-client view based on their snake head
+      const s = world.getSnakes().get(c.id);
+      let snap = snapshot;
+      if (s && s.segments.length) {
+        const h = s.segments[0]!;
+        snap = world.createViewSnapshot(snapshot.tick, snapshot.now, h.x, h.y, NETWORK.viewRadius);
       }
+      const payload = JSON.stringify({ type: "state", snapshot: snap } as ServerToClientMessage);
+      c.ws.send(payload);
+      sentCount++;
     }
     const processingTime = Math.round((performance.now() - start) * 100) / 100; // 2 decimals
     if (Math.random() < 0.02) {

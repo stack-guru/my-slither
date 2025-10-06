@@ -16,7 +16,7 @@ export const SNAKE = {
 
 export const FOOD = {
   radius: 3,
-  targetCount: 600,
+  targetCount: 1200,
   perTickSpawnMax: 10,
   colors: [
     0xffffff, 0xffb6c1, 0xadd8e6, 0x90ee90, 0xffdab9,
@@ -28,5 +28,6 @@ export const NETWORK = {
   maxMessageSizeBytes: 64 * 1024,
   heartbeatIntervalMs: 5000,
   inputRateLimitPerSec: 40,
+  viewRadius: 1200,
 };
 

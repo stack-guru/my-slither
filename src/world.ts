@@ -79,7 +79,7 @@ export class World {
       const alive = this.updateSnake(s, dt);
       if (!alive) borderDeaths.push(s.id);
     }
-    if (borderDeaths.length) this.killSnakes(borderDeaths);
+    if (borderDeaths.length) this.killSnakes(borderDeaths, false); // no food on wall crash
     this.resolveCollisions();
     this.maintainFoodPopulation();
   }
@@ -212,13 +212,13 @@ export class World {
       }
       if (dead) toRemove.push(s.id);
     }
-    if (toRemove.length) this.killSnakes(toRemove);
+    if (toRemove.length) this.killSnakes(toRemove, true);
   }
 
-  private killSnakes(ids: string[]): void {
+  private killSnakes(ids: string[], dropFood: boolean): void {
     for (const id of ids) {
       const snake = this.snakes.get(id);
-      if (snake) {
+      if (snake && dropFood) {
         for (let i = 0; i < Math.min(10, snake.segments.length); i++) {
           const p = snake.segments[Math.floor((i * snake.segments.length) / 10)]!;
           this.food.push({ id: this.nextFoodId++, x: p.x, y: p.y, radius: FOOD.radius, color: snake.color });
@@ -267,6 +267,34 @@ export class World {
       })),
       food: this.food.map((f) => [f.id, f.x, f.y, f.radius, f.color]),
     };
+  }
+
+  createViewSnapshot(tick: number, now: number, cx: number, cy: number, r: number): PublicSnapshot {
+    const r2 = r * r;
+    const snakes: PublicSnapshot["snakes"] = [];
+    for (const s of this.snakes.values()) {
+      // include snake if head within view radius (simple heuristic)
+      const h = s.segments[0]!;
+      const dx = h.x - cx;
+      const dy = h.y - cy;
+      if (dx * dx + dy * dy > r2) continue;
+      snakes.push({
+        id: s.id,
+        name: s.name,
+        color: s.color,
+        radius: s.radius,
+        segments: s.segments.map((p) => [p.x, p.y]),
+      });
+    }
+    const food: PublicSnapshot["food"] = [] as any;
+    for (const f of this.food) {
+      const dx = f.x - cx;
+      const dy = f.y - cy;
+      if (dx * dx + dy * dy <= r2) {
+        (food as any).push([f.id, f.x, f.y, f.radius, f.color]);
+      }
+    }
+    return { tick, now, world: { width: this.width, height: this.height }, snakes, food };
   }
 }
 
