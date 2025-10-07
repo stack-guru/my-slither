@@ -1,4 +1,4 @@
-import { FOOD, SNAKE, WORLD } from "./config.js";
+import { FOOD, SNAKE, WORLD, NETWORK } from "./config.js";
 import { clamp, distSq, rotateTowards } from "./math.js";
 import { Food, PublicSnapshot, Snake, Vec2 } from "./types.js";
 import { customAlphabet } from "nanoid";
@@ -253,6 +253,36 @@ export class World {
     return this.food;
   }
 
+  private getMaxSegmentsForDistance(distance: number): number {
+    const config = NETWORK.tailSubsampling;
+    if (distance <= config.nearDistance) {
+      return config.nearSegments;
+    } else if (distance <= config.mediumDistance) {
+      return config.mediumSegments;
+    } else if (distance <= config.farDistance) {
+      return config.farSegments;
+    } else {
+      return config.veryFarSegments;
+    }
+  }
+
+  private subsampleSegments(segments: Array<[number, number]>, maxSegments: number): Array<[number, number]> {
+    if (segments.length <= maxSegments) return segments;
+    
+    // Always keep the head (first segment)
+    const result: Array<[number, number]> = [segments[0]!];
+    
+    // Calculate step size for uniform sampling of the tail
+    const step = (segments.length - 1) / (maxSegments - 1);
+    
+    for (let i = 1; i < maxSegments; i++) {
+      const index = Math.round(i * step);
+      result.push(segments[index]!);
+    }
+    
+    return result;
+  }
+
   createPublicSnapshot(tick: number, now: number): PublicSnapshot {
     return {
       tick,
@@ -277,13 +307,26 @@ export class World {
       const h = s.segments[0]!;
       const dx = h.x - cx;
       const dy = h.y - cy;
-      if (dx * dx + dy * dy > r2) continue;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > r2) continue;
+      
+      // Tail subsampling based on distance
+      let segments = s.segments.map((p) => [p.x, p.y] as [number, number]);
+      
+      if (NETWORK.tailSubsampling.enabled) {
+        const distance = Math.sqrt(distSq);
+        const maxSegments = this.getMaxSegmentsForDistance(distance);
+        if (segments.length > maxSegments) {
+          segments = this.subsampleSegments(segments, maxSegments);
+        }
+      }
+      
       snakes.push({
         id: s.id,
         name: s.name,
         color: s.color,
         radius: s.radius,
-        segments: s.segments.map((p) => [p.x, p.y]),
+        segments,
       });
     }
     const food: PublicSnapshot["food"] = [] as any;

@@ -47,5 +47,16 @@ export const NETWORK = {
     medium: 600,      // Medium distance threshold
     far: 800,         // Far distance threshold (reduced for 200 users)
   },
+  // Tail subsampling settings for bandwidth optimization
+  tailSubsampling: {
+    enabled: true,
+    nearDistance: 200,    // Full detail within 200px
+    mediumDistance: 400,  // Medium detail within 400px
+    farDistance: 600,     // Low detail within 600px
+    nearSegments: 999,    // Send all segments when near
+    mediumSegments: 30,   // Send 30 segments when medium distance
+    farSegments: 15,      // Send 15 segments when far
+    veryFarSegments: 10,  // Send 10 segments when very far
+  },
 };
 
