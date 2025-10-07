@@ -8,8 +8,8 @@ export const WORLD = {
 
 export const SNAKE = {
   baseSpeedUnitsPerSec: 120,
-  radius: 15,
-  initialSegments: 10,
+  radius: 14,
+  initialSegments: 20,
   boostMultiplier: 2,
   segmentSpacing: 2,
   turnSpeedRadiansPerSec: Math.PI * 1.5,
@@ -29,7 +29,7 @@ export const NETWORK = {
   maxMessageSizeBytes: 64 * 1024,
   heartbeatIntervalMs: 5000,
   inputRateLimitPerSec: 40,
-  viewRadius: 520,
+  viewRadius: 400, // Reduced for better performance with 200 users
   // Backpressure settings
   backpressureBytes: 256 * 1024, // 256KB buffer limit
   backpressureSkipThreshold: 0.8, // Skip if buffer > 80% full
@@ -42,10 +42,10 @@ export const NETWORK = {
     veryFar: 8,    // Every 8 ticks (240ms) - beyond viewRadius
   },
   distanceThresholds: {
-    veryClose: 200,  // Very close distance threshold
-    close: 400,       // Close distance threshold
-    medium: 800,      // Medium distance threshold
-    far: 1200,        // Far distance threshold
+    veryClose: 150,  // Very close distance threshold (reduced for 200 users)
+    close: 300,       // Close distance threshold
+    medium: 600,      // Medium distance threshold
+    far: 800,         // Far distance threshold (reduced for 200 users)
   },
 };
 

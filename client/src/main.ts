@@ -104,6 +104,8 @@ function render(snapshot: Snapshot) {
         g.clear();
         g.circle(x, y, radius).fill(color);
         g.visible = true;
+        // Z-index: tail (0) to head (highest), so head appears on top
+        g.zIndex = i;
         if (i === 0 && s.id === myId) myHead = [x, y];
       } else {
         g.visible = false;
@@ -152,6 +154,13 @@ function render(snapshot: Snapshot) {
       eyes.lp.circle(lx + fx * pupilOff, ly + fy * pupilOff, pupilR).fill(0x23272a);
       eyes.rp.clear();
       eyes.rp.circle(rx + fx * pupilOff, ry + fy * pupilOff, pupilR).fill(0x23272a);
+      
+      // Eyes should be on top of everything (higher than head)
+      const headZIndex = s.segments.length - 1; // Head has highest z-index
+      eyes.l.zIndex = headZIndex + 1;
+      eyes.r.zIndex = headZIndex + 1;
+      eyes.lp.zIndex = headZIndex + 2;
+      eyes.rp.zIndex = headZIndex + 2;
     }
   }
   // Cleanup graphics not used this frame to avoid memory leaks
