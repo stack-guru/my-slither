@@ -12,6 +12,8 @@ const snakePool: Map<string, Graphics[]> = new Map();
 const foodPool: Map<number, Graphics> = new Map();
 const foodAnimations: Map<number, { baseX: number; baseY: number; offsetX: number; offsetY: number; phase: number; speed: number; radius: number; color: number; colorPhase: number; baseColor: number }> = new Map();
 const debug = new Graphics();
+let mouseX = 0;
+let mouseY = 0;
 
 async function setup() {
   await app.init({ background: "#101012", resizeTo: window, antialias: true });
@@ -49,6 +51,11 @@ function hookInput() {
     const dx = e.clientX - cx;
     const dy = e.clientY - cy;
     const angle = Math.atan2(dy, dx);
+    
+    // Store mouse position for eye tracking
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    
     sendInput(angle, boosting);
   });
 }
@@ -165,17 +172,44 @@ function render(snapshot: Snapshot) {
         snakesLayer.addChild(eyes.lp);
         snakesLayer.addChild(eyes.rp);
       }
+      
+      // Calculate eye direction based on mouse position (only for my snake)
+      let eyeDirectionX = fx;
+      let eyeDirectionY = fy;
+      
+      if (s.id === myId) {
+        // Convert mouse position to world coordinates
+        const worldMouseX = (mouseX - app.renderer.width / 2) / worldLayer.scale.x + hx;
+        const worldMouseY = (mouseY - app.renderer.height / 2) / worldLayer.scale.y + hy;
+        
+        // Calculate direction from head to mouse
+        const mouseDx = worldMouseX - hx;
+        const mouseDy = worldMouseY - hy;
+        const mouseLen = Math.hypot(mouseDx, mouseDy);
+        
+        if (mouseLen > 0) {
+          eyeDirectionX = mouseDx / mouseLen;
+          eyeDirectionY = mouseDy / mouseLen;
+        }
+      }
+      
       // Eyeballs (white)
       eyes.l.clear();
       eyes.l.circle(lx, ly, eyeR).fill(0xffffff);
       eyes.r.clear();
       eyes.r.circle(rx, ry, eyeR).fill(0xffffff);
-      // Pupils (black) slightly forward in the eye
-      const pupilOff = s.radius * 0.1;
+      
+      // Pupils (black) looking in the calculated direction
+      const pupilOff = s.radius * 0.2; // Slightly larger offset for more visible movement
+      const leftPupilX = lx + eyeDirectionX * pupilOff;
+      const leftPupilY = ly + eyeDirectionY * pupilOff;
+      const rightPupilX = rx + eyeDirectionX * pupilOff;
+      const rightPupilY = ry + eyeDirectionY * pupilOff;
+      
       eyes.lp.clear();
-      eyes.lp.circle(lx + fx * pupilOff, ly + fy * pupilOff, pupilR).fill(0x23272a);
+      eyes.lp.circle(leftPupilX, leftPupilY, pupilR).fill(0x23272a);
       eyes.rp.clear();
-      eyes.rp.circle(rx + fx * pupilOff, ry + fy * pupilOff, pupilR).fill(0x23272a);
+      eyes.rp.circle(rightPupilX, rightPupilY, pupilR).fill(0x23272a);
       
       // Eyes should be on top of everything (higher than head)
       const headZIndex = s.segments.length - 1; // Head has highest z-index
