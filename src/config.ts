@@ -13,6 +13,7 @@ export const SNAKE = {
   boostMultiplier: 2,
   segmentSpacing: 2,
   turnSpeedRadiansPerSec: Math.PI * 1.5,
+  spawnDelayMs: 1000, // 1 seconds delay before snake can move
 };
 
 export const FOOD = {
@@ -20,8 +21,8 @@ export const FOOD = {
   targetCount: 600,
   perTickSpawnMax: 10,
   colors: [
-    0xffffff, 0xffb6c1, 0xadd8e6, 0x90ee90, 0xffdab9,
-    0xdda0dd, 0xffffe0, 0xb0c4de, 0xffc0cb, 0x98fb98,
+    0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff,
+    0x00ffff, 0xff8000, 0x8000ff, 0xff0080, 0x80ff00,
   ],
 };
 

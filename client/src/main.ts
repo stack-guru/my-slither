@@ -228,7 +228,7 @@ function animateFoods() {
   for (const [id, anim] of foodAnimations) {
     // Update animation phase
     anim.phase += anim.speed * 0.016; // 60fps update rate
-    anim.colorPhase += 0.02; // Color pulsing speed
+    anim.colorPhase += 0.08; // Faster color pulsing speed (was 0.02)
     
     // Create smooth floating motion using sine waves
     const amplitude = 3; // Fixed amplitude for visible movement

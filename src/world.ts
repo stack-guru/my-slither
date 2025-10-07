@@ -40,6 +40,7 @@ export class World {
       });
     }
 
+    const spawnTime = Date.now();
     const snake: Snake = {
       id,
       name,
@@ -52,6 +53,7 @@ export class World {
       segmentSpacing: SNAKE.segmentSpacing,
       targetSegments: SNAKE.initialSegments,
       segments,
+      spawnTime,
     };
     this.snakes.set(id, snake);
     return snake;
@@ -63,12 +65,27 @@ export class World {
 
   respawnSnake(oldId: string, name: string, color: number): Snake {
     this.snakes.delete(oldId);
-    return this.addSnake(name, color);
+    const newSnake = this.addSnake(name, color);
+    // Update spawn time for respawned snake
+    newSnake.spawnTime = Date.now();
+    return newSnake;
   }
 
   setSnakeInput(id: string, desiredAngle: number, boosting: boolean | undefined) {
     const s = this.snakes.get(id);
     if (!s) return;
+    
+    // Only apply spawn delay to bot snakes (player snakes can move immediately)
+    // Bot snakes have names starting with "Bot"
+    if (s.name.startsWith("Bot")) {
+      const now = Date.now();
+      const timeSinceSpawn = now - s.spawnTime;
+      if (timeSinceSpawn < SNAKE.spawnDelayMs) {
+        // Bot snake is still in spawn delay, ignore input
+        return;
+      }
+    }
+    
     s.desiredAngle = desiredAngle;
     s.boosting = Boolean(boosting);
   }
@@ -85,6 +102,17 @@ export class World {
   }
 
   private updateSnake(s: Snake, dt: number): boolean {
+    // Only apply spawn delay to bot snakes (player snakes can move immediately)
+    // Bot snakes have names starting with "Bot"
+    if (s.name.startsWith("Bot")) {
+      const now = Date.now();
+      const timeSinceSpawn = now - s.spawnTime;
+      if (timeSinceSpawn < SNAKE.spawnDelayMs) {
+        // Bot snake is still in spawn delay, don't move at all
+        return true; // Keep snake alive but don't move
+      }
+    }
+
     const turnSpeed = SNAKE.turnSpeedRadiansPerSec * dt;
     s.angle = rotateTowards(s.angle, s.desiredAngle, turnSpeed);
 

@@ -14,6 +14,7 @@ export type Snake = {
   segmentSpacing: number;
   targetSegments: number; // desired number of spaced segments (length)
   segments: SnakeSegment[]; // [0] is head
+  spawnTime: number; // timestamp when snake was created
 };
 
 export type Food = {
