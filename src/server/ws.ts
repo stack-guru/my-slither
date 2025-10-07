@@ -165,8 +165,6 @@ export function createWSServer({ port, world }: ServerDeps) {
     let fullCount = 0;
     let deltaCount = 0;
     let skippedCount = 0;
-    let adaptiveSkipCount = 0;
-    let updateRateStats = { veryClose: 0, close: 0, medium: 0, far: 0, veryFar: 0 };
     
     for (const c of clients.values()) {
       if (c.ws.readyState !== WebSocket.OPEN) continue;
@@ -184,35 +182,25 @@ export function createWSServer({ port, world }: ServerDeps) {
         continue; // Skip this client to prevent overload
       }
       
-      // Check adaptive update rate - skip if not time for update
-      if (!shouldSendUpdate(c, snapshot.tick)) {
-        adaptiveSkipCount++;
-        continue; // Skip this client due to adaptive rate
-      }
+      // Adaptive update rates disabled - always send at 30ms
+      // if (!shouldSendUpdate(c, snapshot.tick)) {
+      //   adaptiveSkipCount++;
+      //   continue; // Skip this client due to adaptive rate
+      // }
       
-      // Update client's update rate based on closest snake distance
-      const s = world.getSnakes().get(c.id);
-      if (s && s.segments.length) {
-        const closestDistance = getClosestSnakeDistance(s, world.getSnakes());
-        const newUpdateRate = getUpdateRate(closestDistance);
-        if (newUpdateRate !== c.updateRate) {
-          c.updateRate = newUpdateRate;
-          // Debug: log update rate changes occasionally
-          if (Math.random() < 0.05) {
-            console.log(`[ADAPTIVE] Client ${c.id} update rate: ${c.updateRate} (distance: ${Math.round(closestDistance)}px)`);
-          }
-        }
-        
-        // Track update rate statistics
-        if (c.updateRate === 1) updateRateStats.veryClose++;
-        else if (c.updateRate === 1) updateRateStats.close++;
-        else if (c.updateRate === 2) updateRateStats.medium++;
-        else if (c.updateRate === 4) updateRateStats.far++;
-        else if (c.updateRate === 8) updateRateStats.veryFar++;
-      }
+      // Update rate tracking disabled
+      // const s = world.getSnakes().get(c.id);
+      // if (s && s.segments.length) {
+      //   const closestDistance = getClosestSnakeDistance(s, world.getSnakes());
+      //   const newUpdateRate = getUpdateRate(closestDistance);
+      //   if (newUpdateRate !== c.updateRate) {
+      //     c.updateRate = newUpdateRate;
+      //   }
+      // }
       
       // Per-client view based on their snake head
       let snap = snapshot;
+      const s = world.getSnakes().get(c.id);
       if (s && s.segments.length) {
         const h = s.segments[0]!;
         snap = world.createViewSnapshot(snapshot.tick, snapshot.now, h.x, h.y, NETWORK.viewRadius);
@@ -254,7 +242,7 @@ export function createWSServer({ port, world }: ServerDeps) {
       const getViewCount = 0;
       const cacheReuseCount = 0;
       // Match src_demo's style and include foods for visibility
-      console.log(`📡 SEND: players=${totalPlayers} foods=${foodCount} batches=${batchCount} time=${processingTime}ms full=${fullCount} delta=${deltaCount} skip=${skippedCount} adaptive=${adaptiveSkipCount} rates{1=${updateRateStats.veryClose+updateRateStats.close},2=${updateRateStats.medium},4=${updateRateStats.far},8=${updateRateStats.veryFar}} views{subs=${subsBuildCount},fallback=${getViewCount},cache=${cacheReuseCount}}`);
+      console.log(`📡 SEND: players=${totalPlayers} foods=${foodCount} batches=${batchCount} time=${processingTime}ms full=${fullCount} delta=${deltaCount} skip=${skippedCount} views{subs=${subsBuildCount},fallback=${getViewCount},cache=${cacheReuseCount}}`);
     }
   }
 
