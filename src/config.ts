@@ -29,30 +29,30 @@ export const NETWORK = {
   maxMessageSizeBytes: 64 * 1024,
   heartbeatIntervalMs: 5000,
   inputRateLimitPerSec: 40,
-  viewRadius: 400, // Reduced for better performance with 200 users
+  viewRadius: 600, // Increased for better visibility (was 400)
   // Backpressure settings
   backpressureBytes: 256 * 1024, // 256KB buffer limit
   backpressureSkipThreshold: 0.8, // Skip if buffer > 80% full
   // Adaptive update rates
   updateRates: {
-    veryClose: 1,  // Every tick (30ms) - within 200px
-    close: 1,      // Every tick (30ms) - within 400px
-    medium: 2,     // Every 2 ticks (60ms) - within 800px  
+    veryClose: 1,  // Every tick (30ms) - within 300px
+    close: 1,      // Every tick (30ms) - within 600px
+    medium: 2,     // Every 2 ticks (60ms) - within 1200px  
     far: 4,        // Every 4 ticks (120ms) - within viewRadius
     veryFar: 8,    // Every 8 ticks (240ms) - beyond viewRadius
   },
   distanceThresholds: {
-    veryClose: 150,  // Very close distance threshold (reduced for 200 users)
-    close: 300,       // Close distance threshold
-    medium: 600,      // Medium distance threshold
-    far: 800,         // Far distance threshold (reduced for 200 users)
+    veryClose: 225,   // Very close distance threshold (1.5x increase)
+    close: 450,       // Close distance threshold (1.5x increase)
+    medium: 900,      // Medium distance threshold (1.5x increase)
+    far: 1200,        // Far distance threshold (1.5x increase)
   },
   // Tail subsampling settings for bandwidth optimization
   tailSubsampling: {
     enabled: true,
-    nearDistance: 200,    // Full detail within 200px
-    mediumDistance: 400,  // Medium detail within 400px
-    farDistance: 600,     // Low detail within 600px
+    nearDistance: 300,    // Full detail within 300px (1.5x increase)
+    mediumDistance: 600,  // Medium detail within 600px (1.5x increase)
+    farDistance: 900,     // Low detail within 900px (1.5x increase)
     nearSegments: 999,    // Send all segments when near
     mediumSegments: 30,   // Send 30 segments when medium distance
     farSegments: 15,      // Send 15 segments when far
