@@ -10,6 +10,7 @@ const border = new Graphics();
 const eyePool: Map<string, { l: Graphics; r: Graphics; lp: Graphics; rp: Graphics }> = new Map();
 const snakePool: Map<string, Graphics[]> = new Map();
 const foodPool: Map<number, Graphics> = new Map();
+const foodAnimations: Map<number, { baseX: number; baseY: number; offsetX: number; offsetY: number; phase: number; speed: number; radius: number; color: number; colorPhase: number; baseColor: number }> = new Map();
 const debug = new Graphics();
 
 async function setup() {
@@ -61,7 +62,7 @@ function render(snapshot: Snapshot) {
   const usedSnakeIds = new Set<string>();
   const usedFoodIds = new Set<number>();
 
-  // draw food
+  // draw food - just setup, animation will handle drawing
   for (const [id, x, y, r, color] of snapshot.food) {
     usedFoodIds.add(id);
     let g = foodPool.get(id);
@@ -70,12 +71,33 @@ function render(snapshot: Snapshot) {
       foodPool.set(id, g);
       foodLayer.addChild(g);
     }
-    g.clear();
-    // Core circle
-    g.circle(x, y, r).fill(color ?? 0x88ff88);
-    // Glow ring
-    g.circle(x, y, r * 1.8).stroke({ width: 2, color: color ?? 0x88ff88, alpha: 0.5 });
-    g.circle(x, y, r * 1.4).stroke({ width: 3, color: color ?? 0x88ff88, alpha: 0.35 });
+    
+    // Get or create animation data for this food
+    let anim = foodAnimations.get(id);
+    if (!anim) {
+      // Create new animation with random phase and speed
+      anim = {
+        baseX: x,
+        baseY: y,
+        offsetX: 0,
+        offsetY: 0,
+        phase: Math.random() * Math.PI * 2, // Random starting phase
+        speed: 0.5 + Math.random() * 1.0, // Random speed between 0.5-1.5
+        radius: r * 1.5, // Make food bigger
+        color: color ?? 0x88ff88,
+        colorPhase: Math.random() * Math.PI * 2, // Random color phase
+        baseColor: color ?? 0x88ff88,
+      };
+      foodAnimations.set(id, anim);
+    } else {
+      // Update base position and properties if food moved
+      anim.baseX = x;
+      anim.baseY = y;
+      anim.radius = r * 1.5; // Make food bigger
+      anim.baseColor = color ?? 0x88ff88;
+    }
+    
+    // Don't draw here - let animation handle it
   }
 
   // draw snakes
@@ -169,6 +191,8 @@ function render(snapshot: Snapshot) {
       if (g.parent) g.parent.removeChild(g);
       g.destroy();
       foodPool.delete(id);
+      // Also cleanup animation data
+      foodAnimations.delete(id);
     }
   }
   for (const [sid, pieces] of snakePool) {
@@ -199,10 +223,51 @@ function render(snapshot: Snapshot) {
   }
 }
 
+function animateFoods() {
+  // Update food animations continuously at 60fps
+  for (const [id, anim] of foodAnimations) {
+    // Update animation phase
+    anim.phase += anim.speed * 0.016; // 60fps update rate
+    anim.colorPhase += 0.02; // Color pulsing speed
+    
+    // Create smooth floating motion using sine waves
+    const amplitude = 3; // Fixed amplitude for visible movement
+    anim.offsetX = Math.sin(anim.phase) * amplitude;
+    anim.offsetY = Math.cos(anim.phase * 0.7) * amplitude * 0.5; // Different frequency for Y
+    
+    // Create pulsing color effect (bright to dark and back)
+    const colorIntensity = (Math.sin(anim.colorPhase) + 1) * 0.5; // 0 to 1
+    const minBrightness = 0.3; // Minimum brightness (30%)
+    const maxBrightness = 1.0; // Maximum brightness (100%)
+    const brightness = minBrightness + (maxBrightness - minBrightness) * colorIntensity;
+    
+    // Apply brightness to the base color
+    const r = Math.floor(((anim.baseColor >> 16) & 0xFF) * brightness);
+    const g = Math.floor(((anim.baseColor >> 8) & 0xFF) * brightness);
+    const b = Math.floor((anim.baseColor & 0xFF) * brightness);
+    const pulsingColor = (r << 16) | (g << 8) | b;
+    
+    // Update the graphics object position
+    const foodG = foodPool.get(id);
+    if (foodG) {
+      foodG.clear();
+      const finalX = anim.baseX + anim.offsetX;
+      const finalY = anim.baseY + anim.offsetY;
+      
+      // Draw the food with pulsing color
+      foodG.circle(finalX, finalY, anim.radius).fill(pulsingColor);
+    }
+  }
+}
+
 function startNet() {
   onSnapshot((snap) => {
     render(snap);
   });
+  
+  // Start continuous animation loop
+  app.ticker.add(animateFoods);
+  
   connect();
 }
 
